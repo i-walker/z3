@@ -507,7 +507,6 @@ public:
     void fill_var_set_for_random_update(unsigned sz, var_index const * vars, vector<unsigned>& column_list);
 
     void random_update(unsigned sz, var_index const * vars);
-    void pivot_fixed_vars_from_basis();
     void pop();
     bool column_represents_row_in_tableau(unsigned j);
     void make_sure_that_the_bottom_right_elem_not_zero_in_tableau(unsigned i, unsigned j);
@@ -597,6 +596,15 @@ public:
         }
         return out;
     }
+
+    template <typename R>
+    std::ostream& print_row_with_columns_info(const R& row, std::ostream& out) const {
+        print_row(row, out);
+        for (auto & p : row) {
+            print_column_info(p.var(), out);
+        }
+        return out;
+    }
     
     bool has_int_var() const;
 
@@ -643,5 +651,6 @@ public:
     bool inside_bounds(lpvar, const impq&) const;
     void backup_x() { m_backup_x = m_mpq_lar_core_solver.m_r_x; }
     void restore_x() { m_mpq_lar_core_solver.m_r_x = m_backup_x; }
+    template <typename F> void pivot_columns_from_basis_with_conditions(const F& cond) { m_mpq_lar_core_solver.m_r_solver.pivot_columns_from_basis_with_conditions(cond); }
 };
 }

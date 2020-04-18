@@ -92,8 +92,9 @@ public:
 private:
     emonics                  m_emons;
     svector<lpvar>           m_add_buffer;
-    mutable lp::u_set      m_active_var_set;
-    lp::u_set              m_rows;
+    mutable lp::u_set        m_active_var_set;
+    lp::u_set                m_rows;
+    bool                     m_patching_power;
 public:
     reslimit                 m_reslim;
 
@@ -138,6 +139,8 @@ public:
         return r;
     }
 
+    bool patch_power(const monic & m);
+    
     bool canonize_sign_is_correct(const monic& m) const;
 
     lpvar var(monic const& sv) const { return sv.var(); }
@@ -152,7 +155,7 @@ public:
 
     // returns true if the combination of the Horner's schema and Grobner Basis should be called
     bool need_to_call_algebraic_methods() const { 
-	return
+	return lp_settings().stats().m_nla_calls <= 1 ||
             lp_settings().stats().m_nla_calls % m_nla_settings.horner_frequency() == 0; 
     }
     
@@ -161,7 +164,7 @@ public:
     svector<lpvar> sorted_rvars(const factor& f) const;
     bool done() const;
 
-    void add_empty_lemma();
+    void add_lemma();
     // the value of the factor is equal to the value of the variable multiplied
     // by the canonize_sign
     bool canonize_sign(const factor& f) const;
@@ -424,6 +427,7 @@ public:
     bool try_to_patch(lpvar, const rational&, const monic&);
     bool to_refine_is_correct() const;
     bool patch_blocker(lpvar u, const monic& m) const;
+    void pivot_out_monomial_vars_from_basis();
 };  // end of core
 
 struct pp_mon {

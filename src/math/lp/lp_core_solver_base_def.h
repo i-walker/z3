@@ -954,28 +954,6 @@ template <typename T, typename X> bool lp_core_solver_base<T, X>::pivot_column_g
 	return true;
 }
 
-template <typename T, typename X>  void lp_core_solver_base<T, X>::pivot_fixed_vars_from_basis() {
-    // run over basis and non-basis at the same time
-    indexed_vector<T> w(m_basis.size()); // the buffer
-    unsigned i = 0; // points to basis
-    for (; i < m_basis.size(); i++) {
-        unsigned basic_j = m_basis[i];
-
-        if (get_column_type(basic_j) != column_type::fixed) continue;
-        T a;
-        unsigned j;
-        for (auto &c : m_A.m_rows[i]) {
-            j = c.var();
-            if (j == basic_j)
-                continue;
-            if (get_column_type(j) != column_type::fixed) {
-                if (pivot_column_general(j, basic_j, w))
-                    break;
-            }
-        }
-    }
-}
-
 template <typename T, typename X> bool lp_core_solver_base<T, X>::remove_from_basis(unsigned basic_j) {
     indexed_vector<T> w(m_basis.size()); // the buffer
     unsigned i = m_basis_heading[basic_j];

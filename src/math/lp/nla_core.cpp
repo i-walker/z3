@@ -1243,7 +1243,7 @@ rational core::val(const factorization& f) const {
     return r;
 }
 
-void core::add_empty_lemma() {
+void core::add_lemma() {
     m_lemma_vec->push_back(lemma()); 
 }
     
@@ -1377,15 +1377,18 @@ bool core::patch_blocker(lpvar u, const monic& m) const {
         return true;
     }
     
-    bool ret = u == m.var() || m.contains_var(u);
+    bool ret = !m_patching_power && ( u == m.var() || m.contains_var(u));
     
-    TRACE("nla_solver", tout << "u = " << u << ", m  = "; print_monic(m, tout) <<
-          "ret = " << ret << "\n";);
+    TRACE("nla_solver", tout << "u = " << u << ", m  = "; print_monic(m, tout);
+              tout <<  "m_patching_power = " << m_patching_power << "\n"          
+          << (ret? "block": "do not block") << "\n"; );
     
     return ret;
 }
 
 bool core::try_to_patch(lpvar k, const rational& v, const monic & m) {
+    TRACE("nla_solver", tout << "patching " << k << "\n";);
+
     return m_lar_solver.try_to_patch(k, v,
                                      [this, k, m](lpvar u) {
                                          if (u == k)
@@ -1414,10 +1417,39 @@ bool core::to_refine_is_correct() const {
     return true;
 }
 
+bool core::patch_power(const monic& m) {
+    if (!m.is_power()) {
+        TRACE("nla_solver", tout << "not a power\n";);
+        return false;
+    }
+    m_patching_power = true;
+    TRACE("nla_solver", tout << "is power\n";);
+    rational root;        
+    if (var_val(m).root(m.size(), root)) {
+        TRACE("nla_solver", tout << "root = " << root << "\n";);
+        lpvar k = m.vars()[0];
+        if (var_is_int(k) && !root.is_int()) {
+            TRACE("nla_solver", tout << "int problem\n";);
+            return false;
+        }
+        if (var_is_used_in_a_correct_monic(k)) {
+            TRACE("nla_solver", tout << "used in a correct monic\n";);
+            return false;
+        }
+        TRACE("nla_solver", tout << "patching\n";);
+        if (try_to_patch(k, root, m))
+            return true;
+        if(m.size() % 2 == 0  && try_to_patch(k, -root, m))
+            return true;
+    }
+
+    return try_to_patch(var(m), mul_val(m), m);    
+}
+
 // looking for any real var to patch
 void core::patch_monomial_with_real_var(lpvar j) {    
     const monic& m = emons()[j];
-    TRACE("nla_solver", tout << "m = "; print_monic(m, tout) << "\n";);
+    TRACE("nla_solver", tout << "m = "; print_monic_with_vars(m, tout) << "\n";);
     rational v = mul_val(m);
     SASSERT(j == var(m));
     if (var_val(m) == v) {
@@ -1432,19 +1464,12 @@ void core::patch_monomial_with_real_var(lpvar j) {
         return;
     }
 
-    // handle perfect squares
-    if (m.vars().size() == 2 && m.vars()[0] == m.vars()[1]) {        
-        rational root;
-        if (v.is_perfect_square(root)) {
-            lpvar k = m.vars()[0];
-            if (!var_is_int(k) && 
-                !var_is_used_in_a_correct_monic(k) &&
-                (try_to_patch(k, root, m) || try_to_patch(k, -root, m))
-                ) { 
-            }
-        }
+    if (patch_power(m)) {
+        m_patching_power = false;
         return;
     }
+    m_patching_power = false;
+
     // We have v != abc. Let us suppose we patch b. Then b should
     // be equal to v/ac = v/(abc/b) = b(v/abc)
     rational r = val(j) / v;
@@ -1470,6 +1495,7 @@ void core::patch_monomials_with_real_vars() {
     TRACE("nla_solver", tout << "sz = " << sz << "\n";);
     unsigned start = random();
     for (unsigned i = 0; i < sz; i++) {
+        pivot_out_monomial_vars_from_basis(); // TODO: performance
         patch_monomial_with_real_var(to_refine[(start + i) % sz]);
         if (m_to_refine.size() == 0)
             break;
@@ -1523,14 +1549,14 @@ lbool core::test_check(
 }
 
 std::ostream& core::print_terms(std::ostream& out) const {
-    for (unsigned i = 0; i< m_lar_solver.m_terms.size(); i++) {
+    for (unsigned i = 0; i< m_lar_solver.terms().size(); i++) {
         unsigned ext = lp::tv::mask_term(i);
         if (!m_lar_solver.var_is_registered(ext)) {
             out << "term is not registered\n";
             continue;
         }
         
-        const lp::lar_term & t = *m_lar_solver.m_terms[i];
+        const lp::lar_term & t = *m_lar_solver.terms()[i];
         out << "term:"; print_term(t, out) << std::endl;        
         lpvar j = m_lar_solver.external_to_local(ext);
         print_var(j, out);
@@ -1631,7 +1657,7 @@ std::ostream& core::diagnose_pdd_miss(std::ostream& out) {
         }
     }  
   
-    for (unsigned j = 0; j < m_lar_solver.column_count(); ++j) {
+    for (unsigned j = 0; j < m_lar_solver.number_of_vars(); ++j) {
         if (m_lar_solver.column_has_lower_bound(j) || m_lar_solver.column_has_upper_bound(j)) {
             out << j << ": [";
                 if (m_lar_solver.column_has_lower_bound(j)) out << m_lar_solver.get_lower_bound(j);
@@ -1656,7 +1682,7 @@ bool core::check_pdd_eq(const dd::solver::equation* e) {
         return false;
     eval.get_interval<dd::w_dep::with_deps>(e->poly(), i_wd);  
     std::function<void (const lp::explanation&)> f = [this](const lp::explanation& e) {
-        add_empty_lemma();
+        add_lemma();
         current_expl().add(e);
     };
     if (di.check_interval_for_conflict_on_zero(i_wd, e->dep(), f)) {
@@ -1887,4 +1913,8 @@ bool core::influences_nl_var(lpvar j) const {
     return false;
 }
 
+// it will try to pivot out as many of such vars as possible
+void core::pivot_out_monomial_vars_from_basis() {
+    m_lar_solver.pivot_columns_from_basis_with_conditions([this](unsigned j) { return is_monic_var(j); });
+}
 } // end of nla

@@ -448,7 +448,28 @@ public:
 
     void init_lu();
     int pivots_in_column_and_row_are_different(int entering, int leaving) const;
-    void pivot_fixed_vars_from_basis();
+    template <typename F>
+    void pivot_columns_from_basis_with_conditions(const F & cond) {
+        indexed_vector<T> w(m_basis.size()); // the buffer
+        unsigned i = 0; // points to basis
+        for (; i < m_basis.size(); i++) {
+            unsigned basic_j = m_basis[i];
+
+            if (!cond(basic_j)) continue;
+            T a;
+            unsigned j;
+            for (auto &c : m_A.m_rows[i]) {
+                j = c.var();
+                if (j == basic_j)
+                    continue;
+                if (!cond(j)) {
+                    if (pivot_column_general(j, basic_j, w))
+                        break;
+                }
+            }
+        }
+    }
+    
     bool remove_from_basis(unsigned j);
     bool pivot_column_general(unsigned j, unsigned j_basic, indexed_vector<T> & w);
     bool pivot_for_tableau_on_basis();

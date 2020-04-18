@@ -43,7 +43,7 @@ public:
     nla_settings() : m_run_order(true),
                      m_run_tangents(true),
                      m_run_horner(true),
-                     m_horner_frequency(4),
+                     m_horner_frequency(1), // debug
                      m_horner_row_length_limit(10),
                      m_horner_subs_fixed(2),
                      m_run_grobner(true),
