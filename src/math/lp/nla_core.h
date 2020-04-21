@@ -92,8 +92,8 @@ public:
 private:
     emonics                  m_emons;
     svector<lpvar>           m_add_buffer;
-    mutable lp::u_set      m_active_var_set;
-    lp::u_set              m_rows;
+    mutable lp::u_set        m_active_var_set;
+    lp::u_set                m_rows;
 public:
     reslimit                 m_reslim;
 
@@ -161,7 +161,7 @@ public:
     svector<lpvar> sorted_rvars(const factor& f) const;
     bool done() const;
 
-    void add_empty_lemma();
+    void add_lemma();
     // the value of the factor is equal to the value of the variable multiplied
     // by the canonize_sign
     bool canonize_sign(const factor& f) const;
@@ -418,12 +418,17 @@ public:
     bool is_nl_var(lpvar) const;
     bool is_used_in_monic(lpvar) const;
     void patch_monomials_with_real_vars();
+    bool patch_power(const monic&, unsigned, const rational&, unsigned);
     void patch_monomial_with_real_var(lpvar);
     bool var_is_used_in_a_correct_monic(lpvar) const;
     void update_to_refine_of_var(lpvar j);
     bool try_to_patch(lpvar, const rational&, const monic&);
     bool to_refine_is_correct() const;
-    bool patch_blocker(lpvar u, const monic& m) const;
+    bool patch_blocker(lpvar u, const monic& m, const rational&) const;
+    void pivot_out_monomial_vars_from_basis();
+    bool patch_power_exactly(const monic& m, unsigned n, const rational& v, unsigned l);
+    bool patch_power_Newton(rational& x, const monic& m, unsigned n, const rational& v, unsigned l);
+    bool try_patch_set(const vector<std::pair<lpvar, rational>>& change);
 };  // end of core
 
 struct pp_mon {

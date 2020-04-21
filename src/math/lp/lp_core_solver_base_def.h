@@ -85,16 +85,6 @@ init() {
         init_factorization(m_factorization, m_A, m_basis, m_settings);
 }
 
-template <typename T, typename X> bool lp_core_solver_base<T, X>::
-pivot_for_tableau_on_basis() {
-    m_d = m_costs; // we will be pivoting to m_d as well
-    unsigned m = m_A.row_count();
-    for (unsigned i = 0; i < m; i++)
-        if (!pivot_column_tableau(m_basis[i], i))
-            return false;
-    return true;
-}
-
 // i is the pivot row, and j is the pivot column
 template <typename T, typename X> void lp_core_solver_base<T, X>::
 pivot_to_reduced_costs_tableau(unsigned i, unsigned j) {
@@ -620,7 +610,7 @@ divide_row_by_pivot(unsigned pivot_row, unsigned pivot_col) {
 }
 template <typename T, typename X> bool lp_core_solver_base<T, X>::
 pivot_column_tableau(unsigned j, unsigned piv_row_index) {
-	if (!divide_row_by_pivot(piv_row_index, j))
+    if (!divide_row_by_pivot(piv_row_index, j))
         return false;
     auto &column = m_A.m_columns[j];
     int pivot_col_cell_index = -1;
@@ -951,32 +941,10 @@ template <typename T, typename X> bool lp_core_solver_base<T, X>::pivot_column_g
 	}
 	else { // the tableau case
 		if (pivot_column_tableau(j, row_index))
-			change_basis(j, j_basic);
+                    change_basis(j, j_basic);
 		else return false;
 	}
 	return true;
-}
-
-template <typename T, typename X>  void lp_core_solver_base<T, X>::pivot_fixed_vars_from_basis() {
-    // run over basis and non-basis at the same time
-    indexed_vector<T> w(m_basis.size()); // the buffer
-    unsigned i = 0; // points to basis
-    for (; i < m_basis.size(); i++) {
-        unsigned basic_j = m_basis[i];
-
-        if (get_column_type(basic_j) != column_type::fixed) continue;
-        T a;
-        unsigned j;
-        for (auto &c : m_A.m_rows[i]) {
-            j = c.var();
-            if (j == basic_j)
-                continue;
-            if (get_column_type(j) != column_type::fixed) {
-                if (pivot_column_general(j, basic_j, w))
-                    break;
-            }
-        }
-    }
 }
 
 template <typename T, typename X> bool lp_core_solver_base<T, X>::remove_from_basis(unsigned basic_j) {

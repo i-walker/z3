@@ -89,7 +89,6 @@ public:
     
 private:
     // lia_move patch_nbasic_columns();
-    bool get_freedom_interval_for_column(unsigned j, bool & inf_l, impq & l, bool & inf_u, impq & u, mpq & m);
     bool is_boxed(unsigned j) const;
     bool is_fixed(unsigned j) const;
     bool is_free(unsigned j) const;
@@ -112,6 +111,7 @@ private:
 
 
 public:
+    bool get_freedom_interval_for_column(unsigned j, bool & inf_l, impq & l, bool & inf_u, impq & u, mpq & m) const;
     std::ostream& display_column(std::ostream & out, unsigned j) const;
     constraint_index column_upper_bound_constraint(unsigned j) const;
     constraint_index column_lower_bound_constraint(unsigned j) const;

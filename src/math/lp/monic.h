@@ -21,15 +21,15 @@ namespace nla {
 
 class mon_eq {
     // fields
-    lp::var_index          m_v;
-    svector<lp::var_index> m_vs;
+    lpvar                  m_v;
+    svector<lpvar>         m_vs;
 public:
     // constructors
-    mon_eq(lp::var_index v, unsigned sz, lp::var_index const* vs):
+    mon_eq(lpvar v, unsigned sz, lpvar const* vs):
         m_v(v), m_vs(sz, vs) {
         std::sort(m_vs.begin(), m_vs.end());
     }
-    mon_eq(lp::var_index v, const svector<lp::var_index> &vs):
+    mon_eq(lpvar v, const svector<lpvar> &vs):
         m_v(v), m_vs(vs) {
         std::sort(m_vs.begin(), m_vs.end());
     }
@@ -37,7 +37,7 @@ public:
         
     unsigned var() const { return m_v; }
     unsigned size() const { return m_vs.size(); }
-    const svector<lp::var_index>& vars() const { return m_vs; }
+    const svector<lpvar>& vars() const { return m_vs; }
     bool empty() const { return m_vs.empty(); }
     bool is_sorted() const {
         for (unsigned i = 0; i + 1 < size(); i++)
@@ -48,8 +48,9 @@ public:
     bool contains_var(lpvar j) const {
         return std::binary_search(m_vs.begin(), m_vs.end(), j);
     }
+    lpvar operator[](unsigned j) const { return m_vs[j]; }
 protected:
-    svector<lp::var_index>& vars1() { return m_vs; }
+    svector<lpvar>& vars1() { return m_vs; }
 };
 
 // support the congruence    
@@ -74,6 +75,15 @@ public:
     void reset_rfields() { m_rsign = false; m_rvars.reset(); SASSERT(m_rvars.size() == 0); }
     void push_rvar(signed_var sv) { m_rsign ^= sv.sign(); m_rvars.push_back(sv.var()); }
     void sort_rvars() { std::sort(m_rvars.begin(), m_rvars.end()); }
+    bool is_power() const {
+        if (size() == 0) return false;
+        lpvar j = vars()[0];
+        for (unsigned k = 1; k < size(); k++) {
+            if (j != vars()[k])
+                return false;
+        }
+        return true;
+    }
 };
 
 inline std::ostream& operator<<(std::ostream& out, monic const& m) {

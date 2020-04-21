@@ -1243,7 +1243,7 @@ rational core::val(const factorization& f) const {
     return r;
 }
 
-void core::add_empty_lemma() {
+void core::add_lemma() {
     m_lemma_vec->push_back(lemma()); 
 }
     
@@ -1370,8 +1370,13 @@ void core::update_to_refine_of_var(lpvar j) {
     }
 }
 
-bool core::patch_blocker(lpvar u, const monic& m) const {
+bool core::patch_blocker(lpvar u, const monic& m, const rational& u_val) const {
     SASSERT(m_to_refine.contains(m.var()));
+    if (var_is_int(u) && !u_val.is_int())
+        return true; // block
+    if (!m_lar_solver.inside_bounds(u, u_val))
+        return true; // block
+
     if (var_is_used_in_a_correct_monic(u)) {
         TRACE("nla_solver", tout << "u = " << u << " blocked as used in a correct monomial\n";);
         return true;
@@ -1386,17 +1391,34 @@ bool core::patch_blocker(lpvar u, const monic& m) const {
 }
 
 bool core::try_to_patch(lpvar k, const rational& v, const monic & m) {
-    return m_lar_solver.try_to_patch(k, v,
-                                     [this, k, m](lpvar u) {
-                                         if (u == k)
-                                             return false; // ok to patch
-                                         return patch_blocker(u, m); },
-                                     [this](lpvar u) { update_to_refine_of_var(u); });
+    TRACE("nla_solver", tout << "patching " << k << "\n";);
+    if (var_is_int(k) && !v.is_int())
+        return false;
+    
+    if (var_is_used_in_a_correct_monic(k))
+        return false;
+    if (!m_lar_solver.check_patch(k, v, 
+                                 [this, k, m](lpvar u, const rational& v) {
+                                     if (u == k)
+                                         return false; // ok to patch
+                                     return patch_blocker(u, m, v);
+                                 })
+        )
+        return false;
+
+    m_lar_solver.patch(k, v, [this](lpvar u) { update_to_refine_of_var(u); });
+    return true;
 }
 
-bool in_power(const svector<lpvar>& vs, unsigned l) {
-    unsigned k = vs[l];
-    return (l != 0 && vs[l - 1] == k) || (l + 1 < vs.size() && k == vs[l + 1]);
+unsigned get_power(const svector<lpvar>& vs, unsigned l) {
+    unsigned n = 1;
+    unsigned v = vs[l];
+    l++;
+    for (; l < vs.size(); l++) {
+        if (v == vs[l])
+            n++;
+    }
+    return n;
 }
 
 bool core::to_refine_is_correct() const {
@@ -1427,40 +1449,95 @@ void core::patch_monomial_with_real_var(lpvar j) {
     if (val(j).is_zero() || v.is_zero()) // a lemma will catch it
         return;
 
-    if (!var_is_int(j) && !var_is_used_in_a_correct_monic(j) && try_to_patch(j, v, m)) {
+    pivot_out_monomial_vars_from_basis();
+    
+    if (try_to_patch(j, v, m)) {
         SASSERT(to_refine_is_correct());        
         return;
     }
 
-    // handle perfect squares
-    if (m.vars().size() == 2 && m.vars()[0] == m.vars()[1]) {        
-        rational root;
-        if (v.is_perfect_square(root)) {
-            lpvar k = m.vars()[0];
-            if (!var_is_int(k) && 
-                !var_is_used_in_a_correct_monic(k) &&
-                (try_to_patch(k, root, m) || try_to_patch(k, -root, m))
-                ) { 
-            }
-        }
-        return;
-    }
     // We have v != abc. Let us suppose we patch b. Then b should
     // be equal to v/ac = v/(abc/b) = b(v/abc)
     rational r = val(j) / v;
+    unsigned n;
     SASSERT(m.is_sorted());
-    for (unsigned l = 0; l < m.size(); l++) {
+    for (unsigned l = 0; l < m.size(); l += n) {
         lpvar k = m.vars()[l];
-        if (!in_power(m.vars(), l) &&
-            !var_is_int(k) && 
-            !var_is_used_in_a_correct_monic(k) &&
-            try_to_patch(k, r * val(k), m)) { // r * val(k) gives the right value of k
-            SASSERT(mul_val(m) == var_val(m));
-            erase_from_to_refine(j);
-            break;
+        n = get_power(m.vars(), l);
+        if (n == 1) {
+            if (try_to_patch(k, r * val(k), m)) { // r * val(k) gives the right value of k
+                SASSERT(mul_val(m) == var_val(m));
+                erase_from_to_refine(j);
+                break;
+            }
+        } else {
+            SASSERT(n > 1);
+            if( patch_power(m, n, (r * val(k).expt(n)), l))
+                break;
         }
     }
-                              
+}
+
+bool core::patch_power_exactly(const monic& m, unsigned n, const rational& v, unsigned l) {
+    rational x;
+    if (v.root(n, x)) {
+        if (try_to_patch(m[l], x, m))
+            return true;
+        if (n % 2 == 0 && 
+            try_to_patch(m[l], -x, m))
+            return true;
+    }
+    return false;
+}
+
+bool core::try_patch_set(const vector<std::pair<lpvar, rational>>& change) {
+    TRACE("nla_solver",
+          for (const auto & p : change) {
+              tout << p.first << "->" << p.second.get_double() << ", ";
+          }
+          tout << "\n";);
+    return false;
+}
+
+// if m = a*x^n then v = val(m)/a. Then a = val(m)/v
+// x is the new value for m[l]
+bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rational& v, unsigned l) {
+    rational a = val(var(m))/v;
+    SASSERT(a == mul_val(m) / val(m[l]).expt(n));
+    // v = val(m)
+    // f(x) = a*x^n - val(m)
+    // f'(x) = a*(n-1)*x^(n-1): f_der
+    // try several Newton iterations trying to get the value of m closer to val(m) and see if we can patch
+    lpvar j = m[l];
+    x = val(j);
+
+    vector<std::pair<lpvar, rational>> change;
+    
+    for (int iters = 5; iters > 0; iters --) {
+        rational axn_1 = a*x.expt(n-1);
+        rational f = a*axn_1*x - val(var(m));
+        rational f_der = a*rational(n-1)*axn_1;
+        x -= f/f_der;
+        change.push_back(std::make_pair(j, x)); change.push_back(std::make_pair(var(m), a*x.expt(n)));
+        if (try_patch_set(change))
+            return true;
+        change.clear();
+    }
+    
+    return false;
+}
+// n is the power in which m[l] appears in m, v is the ideal value far m[l]^n.
+// That is, if we make  m[l]^ = v, and does not change any other value of variables of m
+// then we would have the equality: of course change is not always possible with rational numbers.
+// We might also try here to to change the value of var(m) together with val(m[l]).
+bool core::patch_power(const monic& m, unsigned n, const rational& v, unsigned l) {
+    CTRACE("nla_solver", val(var(m)) > -rational(1) && val(m[l]) > -rational(1),  tout << "m = ";
+           print_monic(m, tout) << ", n = " << n << ", v = " << v << ", l = " << l << "\n";);
+    
+    if (patch_power_exactly(m, n, v, l))
+        return true;
+    rational x;
+    return patch_power_Newton(x, m, n, v, l);
 }
 
 void core::patch_monomials_with_real_vars() {
@@ -1656,7 +1733,7 @@ bool core::check_pdd_eq(const dd::solver::equation* e) {
         return false;
     eval.get_interval<dd::w_dep::with_deps>(e->poly(), i_wd);  
     std::function<void (const lp::explanation&)> f = [this](const lp::explanation& e) {
-        add_empty_lemma();
+        add_lemma();
         current_expl().add(e);
     };
     if (di.check_interval_for_conflict_on_zero(i_wd, e->dep(), f)) {
@@ -1887,4 +1964,10 @@ bool core::influences_nl_var(lpvar j) const {
     return false;
 }
 
+// it will try to pivot out as many of such vars as possible
+void core::pivot_out_monomial_vars_from_basis() {
+    m_lar_solver.pivot_columns_from_basis_conditional_and_preference(
+        [this](unsigned j) { return is_monic_var(j); },
+        [this](unsigned j) { return !m_emons.is_used_in_monic(j); } );
+}
 } // end of nla

@@ -74,6 +74,10 @@ struct basics: common {
 
     void basic_lemma_for_mon_model_based(const monic& rm);
 
+    void basic_lemma_for_mon_power_model_based(const monic& rm);
+    void basic_lemma_for_mon_power_ineq_model_based(const monic& rm);
+    void basic_lemma_for_mon_power_ineq_model_based(const monic& rm, const rational& root);
+
     bool basic_lemma_for_mon_derived(const monic& rm);
     
     // Use basic multiplication properties to create a lemma

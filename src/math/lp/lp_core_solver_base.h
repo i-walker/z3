@@ -450,11 +450,71 @@ public:
 
     void init_lu();
     int pivots_in_column_and_row_are_different(int entering, int leaving) const;
-    void pivot_fixed_vars_from_basis();
+
+    template <typename F>
+    void pivot_columns_from_basis_conditional(const F & cond) {
+        unsigned i = 0; // points to basis
+        for (; i < m_basis.size(); i++) {
+            unsigned basic_j = m_basis[i];
+
+            if (!cond(basic_j)) continue;
+            T a;
+            unsigned j;
+            for (auto &c : m_A.m_rows[i]) {
+                j = c.var();
+                if (j == basic_j)
+                    continue;
+                if (!cond(j)) {
+                    if (pivot_column_tableau(j, i)) {
+                        change_basis(j, basic_j);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+
+    // try removing from the basis the columns j with cond(j) and replace them with j such that pref(j)
+    template <typename F, typename P>
+    void pivot_columns_from_basis_conditional_and_preference(const F & cond, const P & pref) {
+        unsigned i = 0; // row index
+        for (; i < m_basis.size(); i++) {
+            unsigned basic_j = m_basis[i];
+            unsigned found_j = UINT_MAX;
+            if (cond(basic_j)) {                
+                for (auto &c : m_A.m_rows[i]) {
+                    unsigned j = c.var();
+                    if (j == basic_j)
+                        continue;
+                    if (!cond(j)) {
+                        found_j = j;
+                        if (pref(j)) {
+                            break;
+                        }
+                    }
+                }
+            } else if (!pref(basic_j)) {
+                for (auto &c : m_A.m_rows[i]) {
+                    unsigned j = c.var();
+                    if (j == basic_j)
+                        continue;
+                    if (!cond(j) && pref(j)) {
+                            found_j = j;
+                            break;
+                    }
+                }                    
+            }
+            if (found_j != UINT_MAX) {
+                if (pivot_column_tableau(found_j, i))
+                    change_basis(found_j, basic_j);
+            }
+                
+        }
+    }
+
     bool remove_from_basis(unsigned j);
     bool pivot_column_general(unsigned j, unsigned j_basic, indexed_vector<T> & w);
-    bool pivot_for_tableau_on_basis();
-    bool pivot_row_for_tableau_on_basis(unsigned row);
     void init_basic_part_of_basis_heading() {
         unsigned m = m_basis.size();
         for (unsigned i = 0; i < m; i++) {

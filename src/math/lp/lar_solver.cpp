@@ -314,13 +314,6 @@ void lar_solver::fill_explanation_from_crossed_bounds_column(explanation & evide
     
 unsigned lar_solver::get_total_iterations() const { return m_mpq_lar_core_solver.m_r_solver.total_iterations(); }
 
-vector<unsigned> lar_solver::get_list_of_all_var_indices() const {
-    vector<unsigned> ret;
-    for (unsigned j = 0; j < m_mpq_lar_core_solver.m_r_heading.size(); j++)
-        ret.push_back(j);
-    return ret;
-}
-
 void lar_solver::push() {
     m_simplex_strategy = m_settings.simplex_strategy();
     m_simplex_strategy.push();
@@ -1353,11 +1346,6 @@ void lar_solver::random_update(unsigned sz, var_index const * vars) {
     fill_var_set_for_random_update(sz, vars, column_list);
     random_updater ru(*this, column_list);
     ru.update();
-}
-
-
-void lar_solver::pivot_fixed_vars_from_basis() {
-    m_mpq_lar_core_solver.m_r_solver.pivot_fixed_vars_from_basis();
 }
 
 void lar_solver::pop() {
@@ -2417,40 +2405,6 @@ bool lar_solver::inside_bounds(lpvar j, const impq& val) const {
         return false;
     return true;
 }
-
-bool lar_solver::try_to_patch(lpvar j, const mpq& val, const std::function<bool (lpvar)>& blocker, const std::function<void (lpvar)>& report_change) {
-    if (is_base(j)) {        
-        VERIFY(remove_from_basis(j));
-    }
-    impq ival(val);
-    if (!inside_bounds(j, ival) || blocker(j))
-        return false;
-
-    impq delta = get_column_value(j) - ival;
-    for (const auto &c : A_r().column(j)) {
-        unsigned row_index = c.var();
-        const mpq & a = c.coeff();        
-        unsigned rj = m_mpq_lar_core_solver.m_r_basis[row_index];      
-        impq rj_new_val = a * delta + get_column_value(rj);
-        if (column_is_int(rj) && !rj_new_val.is_int())
-            return false;
-        if (!inside_bounds(rj, rj_new_val) || blocker(rj))
-            return false;
-    }
-
-    set_column_value(j, ival);
-    report_change(j);
-    for (const auto &c : A_r().column(j)) {
-        unsigned row_index = c.var();
-        const mpq & a = c.coeff();        
-        unsigned rj = m_mpq_lar_core_solver.m_r_basis[row_index];      
-        m_mpq_lar_core_solver.m_r_solver.add_delta_to_x(rj, a * delta);
-        report_change(rj);
-    }
-
-    return true;
-}
-
 } // namespace lp
 
 

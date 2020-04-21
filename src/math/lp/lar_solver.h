@@ -228,7 +228,6 @@ class lar_solver : public column_namer {
         int inf_sign) const;
     mpq get_left_side_val(const lar_base_constraint &  cns, const std::unordered_map<var_index, mpq> & var_map) const;
     void fill_var_set_for_random_update(unsigned sz, var_index const * vars, vector<unsigned>& column_list);
-    void pivot_fixed_vars_from_basis();
     bool column_represents_row_in_tableau(unsigned j);
     void make_sure_that_the_bottom_right_elem_not_zero_in_tableau(unsigned i, unsigned j);
     void remove_last_row_and_column_from_tableau(unsigned j);
@@ -269,7 +268,7 @@ class lar_solver : public column_namer {
         m_mpq_lar_core_solver.m_r_solver.update_x(j, v);
     }
 public:
-    vector<unsigned> get_list_of_all_var_indices() const;
+    bool inside_bounds(lpvar j, const mpq& v) const { return inside_bounds(j, impq(v)); }
     inline void set_column_value_test(unsigned j, const impq& v) {
         set_column_value(j, v);
     }
@@ -306,7 +305,6 @@ public:
     bool column_corresponds_to_term(unsigned) const;
     inline unsigned row_count() const { return A_r().row_count(); }
     bool var_is_registered(var_index vj) const;
-    bool try_to_patch(lpvar, const mpq&, const std::function<bool (lpvar)>& blocker,const std::function<void (lpvar)>& change_report);
     inline bool column_has_upper_bound(unsigned j) const {
         return m_mpq_lar_core_solver.m_r_solver.column_has_upper_bound(j);
     }
@@ -420,6 +418,7 @@ public:
     inline lar_term const& term(unsigned i) const { return *m_terms[i]; }
     inline void set_int_solver(int_solver * int_slv) { m_int_solver = int_slv; }
     inline int_solver * get_int_solver() { return m_int_solver; }
+    inline const int_solver * get_int_solver() const { return m_int_solver; }
     inline const lar_term & get_term(tv const& t) const { lp_assert(t.is_term()); return *m_terms[t.id()]; }
     lp_status find_feasible_solution();   
     bool move_non_basic_columns_to_bounds();
@@ -472,5 +471,49 @@ public:
     friend int_solver;
     friend int_branch;
 
+    template <typename F> void pivot_columns_from_basis_conditional(const F& cond) {
+        m_mpq_lar_core_solver.m_r_solver.pivot_columns_from_basis_conditional(cond);
+    }
+
+    template <typename F, typename P>
+    void pivot_columns_from_basis_conditional_and_preference(const F & cond, const P & pref) {
+        m_mpq_lar_core_solver.m_r_solver.pivot_columns_from_basis_conditional_and_preference(cond, pref);        
+    }
+
+    template <typename F>
+    bool check_patch(lpvar j, const mpq& val, const F& blocker) const {
+        SASSERT(!is_base(j));
+        impq ival(val);
+        if (!inside_bounds(j, ival) || blocker(j, val))
+            return false;
+
+        impq delta = get_column_value(j) - ival;
+        for (const auto &c : A_r().column(j)) {
+            unsigned row_index = c.var();
+            const mpq & a = c.coeff();        
+            unsigned rj = m_mpq_lar_core_solver.m_r_basis[row_index];      
+            impq rj_new_val = a * delta + get_column_value(rj);
+            SASSERT(rj_new_val.y.is_zero());
+            if (blocker(rj, rj_new_val.x))
+                return false;
+        }
+        return true;
+    }
+
+    template <typename F>
+    void patch(lpvar j, const mpq& val, const F& report_change) {
+        SASSERT(!is_base(j));
+        impq ival(val);    
+        impq delta = get_column_value(j) - ival;
+        set_column_value(j, ival);
+        report_change(j);
+        for (const auto &c : A_r().column(j)) {
+            unsigned row_index = c.var();
+            const mpq & a = c.coeff();        
+            unsigned rj = m_mpq_lar_core_solver.m_r_basis[row_index];      
+            m_mpq_lar_core_solver.m_r_solver.add_delta_to_x(rj, a * delta);
+            report_change(rj);
+        }
+    }
 };
 }

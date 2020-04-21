@@ -36,8 +36,8 @@ class intervals {
 public:
     typedef dep_intervals::interval interval;
 private:
-    u_dependency* mk_dep(lp::constraint_index ci);
-    u_dependency* mk_dep(lp::explanation const&);
+    u_dependency* mk_dep(lp::constraint_index ci) const;
+    u_dependency* mk_dep(lp::explanation const&) const;
     lp::lar_solver& ls();
     const lp::lar_solver& ls() const;
 public:
@@ -61,11 +61,10 @@ public:
     bool is_zero(const interval& a) const { return m_dep_intervals.is_zero(a); }
 
     template <dep_intervals::with_deps_t wd>
-    void set_var_interval(lpvar v, interval& b);
+    void set_var_interval(lpvar v, interval& b) const;
 
     template <dep_intervals::with_deps_t wd>
     bool interval_from_term(const nex& e, scoped_dep_interval& i); 
-
 
     template <dep_intervals::with_deps_t wd, typename T>
     bool interval_of_sum_no_term(const nex_sum& e, scoped_dep_interval&, const std::function<void (const T&)>& f );

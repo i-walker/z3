@@ -84,7 +84,7 @@ bool intervals::check_nex(const nex* n, u_dependency* initial_deps) {
     m_core->lp_settings().stats().m_cross_nested_forms++;
     scoped_dep_interval i(get_dep_intervals());
     std::function<void (const lp::explanation&)> f = [this](const lp::explanation& e) {
-                                                         m_core->add_empty_lemma();
+                                                         m_core->add_lemma();
                                                          m_core->current_expl().add(e);
                                                      };
     if (!interval_of_expr<e_with_deps::without_deps>(n, 1, i, f)) {
@@ -206,11 +206,11 @@ void intervals::set_zero_interval_deps_for_mult(interval& a) {
     a.m_upper_dep = a.m_lower_dep;
 }
 
-u_dependency *intervals::mk_dep(lp::constraint_index ci) {
+u_dependency *intervals::mk_dep(lp::constraint_index ci) const {
     return m_dep_intervals.mk_leaf(ci);
 }
 
-u_dependency *intervals::mk_dep(const lp::explanation& expl) {
+u_dependency *intervals::mk_dep(const lp::explanation& expl) const {
     u_dependency * r = nullptr;
     for (auto p : expl) {
         if (r == nullptr) {
@@ -246,8 +246,9 @@ std::ostream& intervals::display(std::ostream& out, const interval& i) const {
     return out;
 }
 
+
 template <e_with_deps wd>
-void intervals::set_var_interval(lpvar v, interval& b) {
+void intervals::set_var_interval(lpvar v, interval& b) const {
     TRACE("nla_intervals_details", m_core->print_var(v, tout) << "\n";);
     lp::constraint_index ci;
     rational val;

@@ -39,7 +39,7 @@ bool horner::row_has_monomial_to_refine(const T& row) const {
 // Returns true if the row has at least two monomials sharing a variable
 template <typename T>
 bool horner::row_is_interesting(const T& row) const {
-    TRACE("nla_solver_details", c().print_row(row, tout););
+    TRACE("nla_solver_details", c().m_lar_solver.print_row(row, tout) << "\n";);
     if (row.size() > c().m_nla_settings.horner_row_length_limit()) {
         TRACE("nla_solver_details", tout << "disregard\n";);
         return false;
@@ -48,8 +48,12 @@ bool horner::row_is_interesting(const T& row) const {
     c().clear_active_var_set();
     for (const auto& p : row) {
         lpvar j = p.var();
-        if (!c().is_monic_var(j))
+        if (!c().is_monic_var(j)) {
+            if (c().active_var_set_contains(j))
+                return true;
+            c().insert_to_active_var_set(j);
             continue;
+        }
         auto & m = c().emons()[j];
         
         for (lpvar k : m.vars()) {

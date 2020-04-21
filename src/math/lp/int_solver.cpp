@@ -157,7 +157,7 @@ lia_move int_solver::check(lp::explanation * e) {
     check_return_helper pc(lra);
 
     if (settings().m_int_pivot_fixed_vars_from_basis)
-        lra.pivot_fixed_vars_from_basis();
+        lra.pivot_columns_from_basis_conditional([this](unsigned j) {return lra.column_is_fixed(j);});
 
     ++m_number_of_calls;
     if (r == lia_move::undef && m_patcher.should_apply()) r = m_patcher();
@@ -329,7 +329,7 @@ static void set_upper(impq & u, bool & inf_u, impq const & v) {
     }
 }
 
-bool int_solver::get_freedom_interval_for_column(unsigned j, bool & inf_l, impq & l, bool & inf_u, impq & u, mpq & m) {
+bool int_solver::get_freedom_interval_for_column(unsigned j, bool & inf_l, impq & l, bool & inf_u, impq & u, mpq & m) const {
     if (lrac.m_r_heading[j] >= 0) // the basic var 
         return false;
 
