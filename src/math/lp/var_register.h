@@ -43,8 +43,9 @@ class var_register {
     std::unordered_map<unsigned, unsigned> m_external_to_local;
     unsigned m_locals_mask;
     unsigned m_locals_mask_inverted;
+    unsigned m_max_external;
 public:
-    var_register(bool mask_locals): m_locals_mask(mask_locals? tv::left_most_bit: 0), m_locals_mask_inverted(~m_locals_mask) {}
+    var_register(bool mask_locals): m_locals_mask(mask_locals? tv::left_most_bit: 0), m_locals_mask_inverted(~m_locals_mask), m_max_external(UINT_MAX) {}
     
     void set_name(unsigned j, std::string name) {
         m_local_to_external[j].set_name(name);
@@ -55,6 +56,12 @@ public:
     }
 
     unsigned add_var(unsigned user_var, bool is_int) {
+        if (m_max_external == UINT_MAX) {
+            m_max_external = user_var;
+        }
+        else {
+            m_max_external = std::max(m_max_external, user_var);
+        }
         if (user_var != UINT_MAX) {
             auto t = m_external_to_local.find(user_var);
             if (t != m_external_to_local.end()) {
@@ -143,6 +150,8 @@ public:
         }
         m_local_to_external.resize(shrunk_size);
     }
+
+    unsigned max_external() const { return m_max_external; }
     
 };
 }

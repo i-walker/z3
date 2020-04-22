@@ -526,5 +526,15 @@ public:
         }
         
     }
+
+    unsigned get_max_external_index() const {
+        unsigned j = m_var_register.max_external();
+        if (tv::is_term(j)) {
+            j = m_term_register.local_to_external(j);
+        }
+
+        return std::max(j, m_term_register.max_external());
+            
+    }
 };
 }

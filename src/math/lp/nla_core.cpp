@@ -1490,14 +1490,17 @@ bool core::patch_power_exactly(const monic& m, unsigned n, const rational& v, un
     return false;
 }
 
-bool core::try_patch_change_set() {
+bool core::try_patch_change_set(lpvar monic_var_with_power) {
     // TRACE("nla_solver",
     //       for (const auto & p : m_active_var_set) {
     //           tout << p.first << "->" << p.second.get_double() << ", ";
     //       }
     //       tout << "\n";);
-    
-    return false;
+
+    fix_not_changing_vars();
+    add_monic_constraints_patching(monic_var_with_power);
+    m_lar_solver.solve();
+    return m_lar_solver.get_status() == lp::lp_status::FEASIBLE;
 }
 
 
@@ -1513,13 +1516,10 @@ void core::fill_changed_by(lpvar j, vector<lpvar>& q) const {
     m_lar_solver.fill_changed_by(j, q, [this](lpvar k) { return m_active_var_set.contains(k); }); 
 }
 
+// this function will also return true for a monic of the form ...x*x..., if x in m_active_var_set
 bool core::too_many_intersections_with_change_set(const monic& m) const {
-    lpvar prev = UINT_MAX;
     int count = 0;
     for (lpvar j : m.vars()) {
-        if (j == prev)
-            continue;
-        prev = j;
         if (m_active_var_set.contains(j)) {
             count ++;
             if (count == 2)
@@ -1571,39 +1571,79 @@ bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rat
     fill_change_set(j);
     if (!change_set_is_sparse())
         return false;
+    rational mv = a * x.expt(n);
     for (int iters = 5; iters > 0; iters --) {
-        rational axn_1 = a*x.expt(n-1);
-        rational f = a*axn_1*x - val(var(m));
-        rational f_der = a*rational(n-1)*axn_1;
+        rational f_der = a*rational(n-1)*x.expt(n-1);
+        rational f = mv - val(var(m));
         x -= f/f_der;
-        if (try_patch_change_set())
+        mv = a * x.expt(n);
+        if (!m_lar_solver.inside_bounds(j, x) || !m_lar_solver.inside_bounds(var(m), mv))
+            continue;
+        m_lar_solver.push();
+        fix_column_to_val(j, x);
+        fix_column_to_val(var(m), mv);
+        if (try_patch_change_set(var(m))) {
+            m_lar_solver.pop(1);
             return true;
+        }
+        m_lar_solver.pop(1);
     }
     
     return false;
 }
 
+void core::fix_column_to_val(lpvar j, const rational& val) {    
+    m_lar_solver.add_var_bound(j, lp::lconstraint_kind::LE, val);
+    m_lar_solver.add_var_bound(j, lp::lconstraint_kind::GE, val);
+    m_lar_solver.set_column_type(j, lp::column_type::fixed);            
+}
+
+
 void core::fix_not_changing_vars() {
     for (const monic& m : emons()) {
-        if (!m_active_var_set.contains(var(m)))
-            m_lar_solver.set_column_type(var(m), lp::column_type::fixed);
+        if (!m_active_var_set.contains(var(m))) {
+            fix_column_to_val(var(m), val(var(m)));
+        }
         for (lpvar j: m.vars()) {
-            if (m_active_var_set.contains(j))
-                m_lar_solver.set_column_type(j, lp::column_type::fixed);            
+            if (!m_active_var_set.contains(j))
+                fix_column_to_val(j, val(j));
         }
     }
 }
 
-
-void core::add_monic_constraints() {
-    NOT_IMPLEMENTED_YET();
+void core::add_monic_constraint_patching(const monic& m) {
+    if (!m_active_var_set.contains(var(m))) {
+        return;
+    }
+    vector<std::pair<rational, lpvar>> t;
+    t.push_back(std::make_pair(rational(1), var(m)));
+    rational a(1);
+    unsigned j = UINT_MAX;
+    for (lpvar k : m.vars()) {
+        if (m_active_var_set.contains(k)) {
+            SASSERT(j == UINT_MAX);
+            j = k;
+        } else {
+            a *= val(j);
+        }        
+    }
+    SASSERT(j != UINT_MAX);
+    t.push_back(std::make_pair(- a, j));
+    unsigned ext_index = m_lar_solver.get_max_external_index();
+    m_lar_solver.add_term(t, ext_index + 1);
+    j = m_lar_solver.number_of_vars() - 1;
+    // j is the slack variable of the term
+    m_lar_solver.add_var_bound(j, lp::lconstraint_kind::GE, rational(0));
+    m_lar_solver.add_var_bound(j, lp::lconstraint_kind::LE, rational(0));
 }
 
-void core::prepare_lar_solver_for_change_set_patching() {
-    m_lar_solver.push();
-    fix_not_changing_vars();
-    add_monic_constraints();
+void core::add_monic_constraints_patching(lpvar monic_var) {
+    for (const monic& m : emons() ) {
+        if (var(m) == monic_var) continue;
+        add_monic_constraint_patching(m);
+    }
 }
+
 
 // n is the power in which m[l] appears in m, v is the ideal value far m[l]^n.
 // That is, if we make  m[l]^ = v, and does not change any other value of variables of m

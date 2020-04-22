@@ -94,7 +94,8 @@ private:
     svector<lpvar>           m_add_buffer;
     mutable lp::u_set        m_active_var_set;
     lp::u_set                m_rows;
-    u_map<rational>          m_change_set; 
+    u_map<rational>          m_change_set;
+    unsigned                 m_patched_monic_var;
 public:
     reslimit                 m_reslim;
 
@@ -429,14 +430,15 @@ public:
     void pivot_out_monomial_vars_from_basis();
     bool patch_power_exactly(const monic& m, unsigned n, const rational& v, unsigned l);
     bool patch_power_Newton(rational& x, const monic& m, unsigned n, const rational& v, unsigned l);
-    bool try_patch_change_set();
+    bool try_patch_change_set(lpvar);
     void fill_change_set(lpvar);
     void fill_changed_by(lpvar, vector<lpvar>&) const;
     bool change_set_is_sparse() const;
     bool too_many_intersections_with_change_set(const monic&) const;
-    void prepare_lar_solver_for_change_set_patching();
-    void add_monic_constraints();
+    void add_monic_constraints_patching(lpvar);
+    void add_monic_constraint_patching(const monic&);
     void fix_not_changing_vars();
+    void fix_column_to_val(lpvar, const rational&);
 };  // end of core
 
 struct pp_mon {
