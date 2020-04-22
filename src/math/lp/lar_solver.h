@@ -340,7 +340,8 @@ public:
     unsigned adjust_column_index_to_term_index(unsigned j) const;
     lp_settings & settings();
     lp_settings const & settings() const;
-    column_type get_column_type(unsigned j) const { return m_mpq_lar_core_solver.m_column_types()[j]; }
+    void set_column_type(unsigned j, column_type t) { m_mpq_lar_core_solver.set_column_type(j, t); }
+    column_type get_column_type(unsigned j) const { return m_mpq_lar_core_solver.get_column_type(j); }
     const impq & get_lower_bound(unsigned j) const { return m_mpq_lar_core_solver.m_r_lower_bounds()[j]; }
     const impq & get_upper_bound(unsigned j) const { return m_mpq_lar_core_solver.m_r_upper_bounds()[j]; }
     std::ostream& print_terms(std::ostream& out) const;
@@ -514,6 +515,16 @@ public:
             m_mpq_lar_core_solver.m_r_solver.add_delta_to_x(rj, a * delta);
             report_change(rj);
         }
+    }
+    template <typename F, typename T>
+    void fill_changed_by(lpvar j, T& changed, const F & ignore) const {
+        for (const auto &c : A_r().column(j)) {
+            unsigned rj = m_mpq_lar_core_solver.m_r_basis[c.var()];
+            if (ignore(rj))
+                continue;
+            changed.push_back(rj);
+        }
+        
     }
 };
 }

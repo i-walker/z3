@@ -294,7 +294,7 @@ void int_solver::set_value_for_nbasic_column_ignore_old_values(unsigned j, const
 
 
 bool int_solver::has_lower(unsigned j) const {
-    switch (lrac.m_column_types()[j]) {
+    switch (lrac.get_column_type(j)) {
     case column_type::fixed:
     case column_type::boxed:
     case column_type::lower_bound:
@@ -305,7 +305,7 @@ bool int_solver::has_lower(unsigned j) const {
 }
 
 bool int_solver::has_upper(unsigned j) const {
-    switch (lrac.m_column_types()[j]) {
+    switch (lrac.get_column_type(j)) {
     case column_type::fixed:
     case column_type::boxed:
     case column_type::upper_bound:
@@ -442,20 +442,20 @@ bool int_solver::is_base(unsigned j) const {
 }
 
 bool int_solver::is_boxed(unsigned j) const {
-    return lrac.m_column_types[j] == column_type::boxed;
+    return lrac.get_column_type(j) == column_type::boxed;
 }
 
 bool int_solver::is_fixed(unsigned j) const {
-    return lrac.m_column_types[j] == column_type::fixed;
+    return lrac.get_column_type(j) == column_type::fixed;
 }
 
 bool int_solver::is_free(unsigned j) const {
-    return lrac.m_column_types[j] == column_type::free_column;
+    return lrac.get_column_type(j) == column_type::free_column;
 }
 
 bool int_solver::at_bound(unsigned j) const {
     auto & mpq_solver = lrac.m_r_solver;
-    switch (mpq_solver.m_column_types[j] ) {
+    switch (mpq_solver.get_column_type(j) ) {
     case column_type::fixed:
     case column_type::boxed:
         return
@@ -472,7 +472,7 @@ bool int_solver::at_bound(unsigned j) const {
 
 bool int_solver::at_lower(unsigned j) const {
     auto & mpq_solver = lrac.m_r_solver;
-    switch (mpq_solver.m_column_types[j] ) {
+    switch (mpq_solver.get_column_type(j) ) {
     case column_type::fixed:
     case column_type::boxed:
     case column_type::lower_bound:
@@ -484,7 +484,7 @@ bool int_solver::at_lower(unsigned j) const {
 
 bool int_solver::at_upper(unsigned j) const {
     auto & mpq_solver = lrac.m_r_solver;
-    switch (mpq_solver.m_column_types[j] ) {
+    switch (mpq_solver.get_column_type(j)) {
     case column_type::fixed:
     case column_type::boxed:
     case column_type::upper_bound:
@@ -574,7 +574,7 @@ bool int_solver::shift_var(unsigned j, unsigned range) {
 bool int_solver::non_basic_columns_are_at_bounds() const {
     for (unsigned j : lrac.m_r_nbasis) {
         auto & val = lrac.m_r_x[j];
-        switch (lrac.m_column_types()[j]) {
+        switch (lrac.get_column_type(j)) {
         case column_type::boxed:
             if (val != lrac.m_r_lower_bounds()[j] && val != lrac.m_r_upper_bounds()[j])
                 return false;

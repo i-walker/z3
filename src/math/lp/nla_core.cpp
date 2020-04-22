@@ -1490,13 +1490,70 @@ bool core::patch_power_exactly(const monic& m, unsigned n, const rational& v, un
     return false;
 }
 
-bool core::try_patch_set(const vector<std::pair<lpvar, rational>>& change) {
-    TRACE("nla_solver",
-          for (const auto & p : change) {
-              tout << p.first << "->" << p.second.get_double() << ", ";
-          }
-          tout << "\n";);
+bool core::try_patch_change_set() {
+    // TRACE("nla_solver",
+    //       for (const auto & p : m_active_var_set) {
+    //           tout << p.first << "->" << p.second.get_double() << ", ";
+    //       }
+    //       tout << "\n";);
+    
     return false;
+}
+
+
+
+void core::fill_changed_by(lpvar j, vector<lpvar>& q) const {
+    for (const monic & m : emons().get_use_list(j)) {
+        lpvar k = var(m);
+        if (m_active_var_set.contains(k))
+            continue;
+        q.push_back(k);
+    }
+
+    m_lar_solver.fill_changed_by(j, q, [this](lpvar k) { return m_active_var_set.contains(k); }); 
+}
+
+bool core::too_many_intersections_with_change_set(const monic& m) const {
+    lpvar prev = UINT_MAX;
+    int count = 0;
+    for (lpvar j : m.vars()) {
+        if (j == prev)
+            continue;
+        prev = j;
+        if (m_active_var_set.contains(j)) {
+            count ++;
+            if (count == 2)
+                return true;
+        }        
+    }
+    return false;
+}
+
+bool core::change_set_is_sparse() const {
+    for (lpvar j : m_active_var_set) {
+        for (const monic & m : emons().get_use_list(j)) {
+            if (too_many_intersections_with_change_set(m))
+                return false;
+        }
+    }
+    return true;
+}
+
+// j plays the role of a seed: then we add every variable that is changed by j, and every variable changed by those, etc.
+void core::fill_change_set(lpvar j) {
+    m_active_var_set.clear();
+    m_active_var_set.resize(m_lar_solver.number_of_vars());
+    vector<lpvar> q;
+    q.push_back(j);
+    do {
+        j = q[q.size() - 1];
+        q.pop_back();       
+        if (m_active_var_set.contains(j))
+            continue;
+        m_active_var_set.insert(j);
+        fill_changed_by(j, q);
+    } while (q.size());
+    TRACE("nla_solver", tout << "change set = "; for (lpvar j : m_active_var_set) { tout << j << ", "; }; tout << "\n";);
 }
 
 // if m = a*x^n then v = val(m)/a. Then a = val(m)/v
@@ -1510,22 +1567,44 @@ bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rat
     // try several Newton iterations trying to get the value of m closer to val(m) and see if we can patch
     lpvar j = m[l];
     x = val(j);
-
-    vector<std::pair<lpvar, rational>> change;
-    
+   
+    fill_change_set(j);
+    if (!change_set_is_sparse())
+        return false;
     for (int iters = 5; iters > 0; iters --) {
         rational axn_1 = a*x.expt(n-1);
         rational f = a*axn_1*x - val(var(m));
         rational f_der = a*rational(n-1)*axn_1;
         x -= f/f_der;
-        change.push_back(std::make_pair(j, x)); change.push_back(std::make_pair(var(m), a*x.expt(n)));
-        if (try_patch_set(change))
+        if (try_patch_change_set())
             return true;
-        change.clear();
     }
     
     return false;
 }
+
+void core::fix_not_changing_vars() {
+    for (const monic& m : emons()) {
+        if (!m_active_var_set.contains(var(m)))
+            m_lar_solver.set_column_type(var(m), lp::column_type::fixed);
+        for (lpvar j: m.vars()) {
+            if (m_active_var_set.contains(j))
+                m_lar_solver.set_column_type(j, lp::column_type::fixed);            
+        }
+    }
+}
+
+
+void core::add_monic_constraints() {
+    NOT_IMPLEMENTED_YET();
+}
+
+void core::prepare_lar_solver_for_change_set_patching() {
+    m_lar_solver.push();
+    fix_not_changing_vars();
+    add_monic_constraints();
+}
+
 // n is the power in which m[l] appears in m, v is the ideal value far m[l]^n.
 // That is, if we make  m[l]^ = v, and does not change any other value of variables of m
 // then we would have the equality: of course change is not always possible with rational numbers.

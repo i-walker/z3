@@ -42,9 +42,9 @@ class lar_core_solver  {
     vector<mpq> m_costs_dummy;
     vector<double> m_d_right_sides_dummy;
     vector<double> m_d_costs_dummy;
+    stacked_vector<column_type> m_column_types;
 public:
     stacked_value<simplex_strategy_enum> m_stacked_simplex_strategy;
-    stacked_vector<column_type> m_column_types;
     // r - solver fields, for rational numbers
     vector<numeric_pair<mpq>> m_r_x; // the solution
     stacked_vector<numeric_pair<mpq>> m_r_lower_bounds;
@@ -89,8 +89,9 @@ public:
 
     void fill_not_improvable_zero_sum_from_inf_row();
     
-    column_type get_column_type(unsigned j) { return m_column_types[j];}
-    
+    column_type get_column_type(unsigned j) const { return m_column_types[j];}
+    void push_column_type(column_type t) { m_column_types.push_back(t); }
+    void set_column_type(unsigned j, column_type t) { m_column_types[j] = t; }
     void init_costs(bool first_time);
 
     void init_cost_for_column(unsigned j);
