@@ -481,6 +481,12 @@ bool lar_solver::move_non_basic_column_to_bounds(unsigned j) {
     auto & lcs = m_mpq_lar_core_solver;
     auto & val = lcs.m_r_x[j];
     switch (lcs.get_column_type(j)) {
+    case column_type::fixed:
+        if (val != lcs.m_r_lower_bounds()[j]) {
+            set_value_for_nbasic_column(j, lcs.m_r_lower_bounds()[j]);
+            return true;
+        }
+        break;
     case column_type::boxed:
         if (val != lcs.m_r_lower_bounds()[j] && val != lcs.m_r_upper_bounds()[j]) {
             if (m_settings.random_next() % 2 == 0)

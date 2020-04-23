@@ -429,7 +429,7 @@ public:
     bool patch_blocker(lpvar u, const monic& m, const rational&) const;
     void pivot_out_monomial_vars_from_basis();
     bool patch_power_exactly(const monic& m, unsigned n, const rational& v, unsigned l);
-    bool patch_power_Newton(rational& x, const monic& m, unsigned n, const rational& v, unsigned l);
+    bool patch_power_Newton(const monic& m, unsigned n, const rational& v, unsigned l);
     bool try_patch_change_set(lpvar);
     void fill_change_set(lpvar);
     void fill_changed_by(lpvar, vector<lpvar>&) const;

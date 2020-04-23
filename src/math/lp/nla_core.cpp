@@ -1499,6 +1499,8 @@ bool core::try_patch_change_set(lpvar monic_var_with_power) {
 
     fix_not_changing_vars();
     add_monic_constraints_patching(monic_var_with_power);
+    m_lar_solver.move_non_basic_columns_to_bounds();
+    SASSERT(m_lar_solver.ax_is_correct());
     TRACE("nla_solver", tout << "before solve\n"; m_lar_solver.pp(tout).print();
           tout << "\n";
           for (unsigned j = 0; j < m_lar_solver.number_of_vars(); j++)
@@ -1506,7 +1508,7 @@ bool core::try_patch_change_set(lpvar monic_var_with_power) {
           );
         
     m_lar_solver.solve();
-    return m_lar_solver.get_status() == lp::lp_status::FEASIBLE;
+    return m_lar_solver.get_status() != lp::lp_status::INFEASIBLE;
 }
 
 
@@ -1565,7 +1567,8 @@ void core::fill_change_set(lpvar j) {
 
 // if m = a*x^n then v = val(m)/a. Then a = val(m)/v
 // x is the new value for m[l]
-bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rational& v, unsigned l) {
+bool core::patch_power_Newton(const monic& m, unsigned n, const rational& v, unsigned l) {
+   
     rational a = val(var(m))/v;
     SASSERT(a == mul_val(m) / val(m[l]).expt(n));
     // v = val(m)
@@ -1573,7 +1576,7 @@ bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rat
     // f'(x) = a*(n-1)*x^(n-1): f_der
     // try several Newton iterations trying to get the value of m closer to val(m) and see if we can patch
     lpvar j = m[l];
-    x = val(j);
+    rational x = val(j);
    
     fill_change_set(j);
     if (!change_set_is_sparse(var(m)))
@@ -1584,6 +1587,8 @@ bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rat
         rational f = mv - val(var(m));
         x -= f/f_der;
         mv = a * x.expt(n);
+        TRACE("nla_solver", tout << "-x = " << x.get_double() << " , mv = " << mv.get_double() << "\n";
+              tout << "- x > 20*mv = "  <<  (-x > ( - rational(20)*mv)) << "\n";);
         if (!m_lar_solver.inside_bounds(j, x) || !m_lar_solver.inside_bounds(var(m), mv))
             continue;
         m_lar_solver.push();
@@ -1665,11 +1670,12 @@ void core::add_monic_constraints_patching(lpvar monic_var) {
 bool core::patch_power(const monic& m, unsigned n, const rational& v, unsigned l) {
     CTRACE("nla_solver", val(var(m)) > -rational(1) && val(m[l]) > -rational(1),  tout << "m = ";
            print_monic(m, tout) << ", n = " << n << ", v = " << v << ", l = " << l << "\n";);
-    
+    // debug
+    if (val(m[l]) > rational(-1))
+        TRACE("nla_solver", tout << "stop\n";);
     if (patch_power_exactly(m, n, v, l))
         return true;
-    rational x;
-    return patch_power_Newton(x, m, n, v, l);
+    return patch_power_Newton(m, n, v, l);
 }
 
 void core::patch_monomials_with_real_vars() {
