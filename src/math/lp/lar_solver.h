@@ -212,7 +212,6 @@ class lar_solver : public column_namer {
     void copy_from_mpq_matrix(static_matrix<U, V> & matr);
     bool try_to_set_fixed(column_info<mpq> & ci);
     bool all_constrained_variables_are_registered(const vector<std::pair<mpq, var_index>>& left_side);
-    bool all_constraints_hold() const;
     bool constraint_holds(const lar_base_constraint & constr, std::unordered_map<var_index, mpq> & var_map) const;
     bool the_relations_are_of_same_type(const vector<std::pair<mpq, unsigned>> & evidence, lconstraint_kind & the_kind_of_sum) const;
     static void register_in_map(std::unordered_map<var_index, mpq> & coeffs, const lar_base_constraint & cn, const mpq & a);
@@ -268,6 +267,7 @@ class lar_solver : public column_namer {
         m_mpq_lar_core_solver.m_r_solver.update_x(j, v);
     }
 public:
+    bool all_constraints_hold() const;
     bool inside_bounds(lpvar j, const mpq& v) const { return inside_bounds(j, impq(v)); }
     inline void set_column_value_test(unsigned j, const impq& v) {
         set_column_value(j, v);

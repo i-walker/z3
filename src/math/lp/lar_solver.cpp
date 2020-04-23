@@ -1850,6 +1850,7 @@ bool lar_solver::compare_values(impq const& lhs, lconstraint_kind k, const mpq &
 
 void lar_solver::update_column_type_and_bound(var_index j, lconstraint_kind kind, const mpq & right_side,
                                               constraint_index constr_index) {
+    TRACE("lar_solver", tout << "j = " << j << " " << lconstraint_kind_string(kind) << " " << right_side << "\n";);
     m_constraints.activate(constr_index);
     if (column_has_upper_bound(j))
         update_column_type_and_bound_with_ub(j, kind, right_side, constr_index);

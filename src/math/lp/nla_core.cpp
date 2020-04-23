@@ -1499,6 +1499,12 @@ bool core::try_patch_change_set(lpvar monic_var_with_power) {
 
     fix_not_changing_vars();
     add_monic_constraints_patching(monic_var_with_power);
+    TRACE("nla_solver", tout << "before solve\n"; m_lar_solver.pp(tout).print();
+          tout << "\n";
+          for (unsigned j = 0; j < m_lar_solver.number_of_vars(); j++)
+              m_lar_solver.print_column_info(j, tout);
+          );
+        
     m_lar_solver.solve();
     return m_lar_solver.get_status() == lp::lp_status::FEASIBLE;
 }
@@ -1529,9 +1535,10 @@ bool core::too_many_intersections_with_change_set(const monic& m) const {
     return false;
 }
 
-bool core::change_set_is_sparse() const {
+bool core::change_set_is_sparse(lpvar monic_var_to_ignore) const {
     for (lpvar j : m_active_var_set) {
         for (const monic & m : emons().get_use_list(j)) {
+            if (var(m) == monic_var_to_ignore) continue;
             if (too_many_intersections_with_change_set(m))
                 return false;
         }
@@ -1569,7 +1576,7 @@ bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rat
     x = val(j);
    
     fill_change_set(j);
-    if (!change_set_is_sparse())
+    if (!change_set_is_sparse(var(m)))
         return false;
     rational mv = a * x.expt(n);
     for (int iters = 5; iters > 0; iters --) {
@@ -1582,11 +1589,17 @@ bool core::patch_power_Newton(rational& x, const monic& m, unsigned n, const rat
         m_lar_solver.push();
         fix_column_to_val(j, x);
         fix_column_to_val(var(m), mv);
+        m_lar_solver.backup_x();        
         if (try_patch_change_set(var(m))) {
             m_lar_solver.pop(1);
+            SASSERT(m_lar_solver.all_constraints_hold());
             return true;
         }
+        m_lar_solver.restore_x();
+        TRACE("nla_solver", tout << "before pop\n"; m_lar_solver.pp(tout).print(););
         m_lar_solver.pop(1);
+        TRACE("nla_solver", tout << "after pop\n"; m_lar_solver.pp(tout).print(););
+        SASSERT(m_lar_solver.all_constraints_hold());
     }
     
     return false;

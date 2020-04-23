@@ -433,7 +433,7 @@ public:
     bool try_patch_change_set(lpvar);
     void fill_change_set(lpvar);
     void fill_changed_by(lpvar, vector<lpvar>&) const;
-    bool change_set_is_sparse() const;
+    bool change_set_is_sparse(lpvar) const;
     bool too_many_intersections_with_change_set(const monic&) const;
     void add_monic_constraints_patching(lpvar);
     void add_monic_constraint_patching(const monic&);
