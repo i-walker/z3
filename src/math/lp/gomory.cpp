@@ -389,56 +389,59 @@ bool gomory::is_gomory_cut_target(const row_strip<mpq>& row) {
 
 int gomory::find_basic_var() {
     int result = -1;
+    mpq range;
+    mpq new_range;
+    mpq small_range_thresold(1024);
     unsigned n = 0;
-    unsigned min_row_size = UINT_MAX;
-#if 0
-    bool boxed = false;
-    mpq min_range;
-#endif
-
-
-    // Prefer smaller row size
-    // Prefer boxed to non-boxed
-    // Prefer smaller ranges
-
-    for (unsigned j : lra.r_basis()) {
+    unsigned prev_usage;
+    unsigned k = 0;
+    unsigned usage;
+    unsigned j;
+    // this loop looks for a column with the most usages, but breaks when
+    // a column with a small span of bounds is found
+    for (; k < lra.r_basis().size(); k++) {
+        j = lra.r_basis()[k];
         if (!lia.column_is_int_inf(j))
             continue;
         const row_strip<mpq>& row = lra.get_row(lia.row_of_basic_column(j));
         if (!is_gomory_cut_target(row)) 
             continue;
-
-#if 0
-        if (is_boxed(j) && (min_row_size == UINT_MAX || 4*row.size() < 5*min_row_size)) {
-            lar_core_solver & lcs = lra.m_mpq_lar_core_solver;
-            auto new_range = lclia.m_r_upper_bounds()[j].x - lclia.m_r_lower_bounds()[j].x;
-            if (!boxed) {
-                result = j;
-                n = 1;
-                min_row_size = row.size();
-                boxed = true;
-                min_range = new_range;
-                continue;
-            }
-            if (min_range > 2*new_range || ((5*min_range > 4*new_range && (random() % (++n)) == 0))) { 
-                result = j;
-                n = 1;
-                min_row_size = row.size();
-                min_range = std::min(min_range, new_range);
-                continue;
-            }
-        }
-#endif
-
-        if (min_row_size == UINT_MAX || 
-            2*row.size() < min_row_size || 
-            (4*row.size() < 5*min_row_size && lia.random() % (++n) == 0)) {
+        usage = lra.usage_in_terms(j);
+        if (lia.is_boxed(j) &&  (range = lia.upper_bound(j).x - lia.lower_bound(j).x - rational(2*usage)) <= small_range_thresold) {
             result = j;
+            k++;            
             n = 1;
-            min_row_size = std::min(min_row_size, row.size());
+            break;
+        }
+        if (n == 0 || usage > prev_usage) {
+            result = j;
+            prev_usage = usage;
+            n = 1;
+        } else if (usage == prev_usage && (lia.random() % (++n) == 0)) {
+            result = j;
         }
     }
-    return result;
+    SASSERT(k == lra.r_basis().size() || n == 1);
+    // this loop looks for boxed columns with a small span
+    for (; k < lra.r_basis().size(); k++) {
+        j = lra.r_basis()[k];
+        usage = lra.usage_in_terms(j);
+        if (!lia.column_is_int_inf(j) || !lia.is_boxed(j))
+            continue;
+        const row_strip<mpq>& row = lra.get_row(lia.row_of_basic_column(j));
+        if (!is_gomory_cut_target(row)) 
+            continue;
+        SASSERT(!lia.is_fixed(j));
+        new_range  = lia.upper_bound(j).x - lia.lower_bound(j).x - rational(2*usage);
+        if (new_range < range) {
+            n = 1;
+            result = j;
+            range = new_range;
+        } else if (new_range == range && (lia.random() % (++n) == 0)) {
+            result = j;                    
+        }
+    }
+    return result;    
 }
     
 lia_move gomory::operator()() {

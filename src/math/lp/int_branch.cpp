@@ -49,8 +49,6 @@ lia_move int_branch::create_branch_on_column(int j) {
           tout << "k = " << lia.m_k << std::endl;);
     return lia_move::branch;        
 }
-
-
     
 int int_branch::find_inf_int_base_column() {
     int result = -1;
