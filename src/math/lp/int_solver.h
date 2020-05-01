@@ -33,7 +33,7 @@ class lar_solver;
 class lar_core_solver;
 
 class int_solver {
-    friend class create_cut;
+    template <typename T> friend class create_cut;
     friend class gomory;
     friend class int_cube;
     friend class int_branch;
@@ -90,8 +90,6 @@ public:
 private:
     // lia_move patch_nbasic_columns();
     bool get_freedom_interval_for_column(unsigned j, bool & inf_l, impq & l, bool & inf_u, impq & u, mpq & m);
-    bool is_boxed(unsigned j) const;
-    bool is_fixed(unsigned j) const;
     bool is_free(unsigned j) const;
     bool value_is_int(unsigned j) const;
     void set_value_for_nbasic_column_ignore_old_values(unsigned j, const impq & new_val);
@@ -112,6 +110,8 @@ private:
 
 
 public:
+    bool is_boxed(unsigned j) const;
+    bool is_fixed(unsigned j) const;
     std::ostream& display_column(std::ostream & out, unsigned j) const;
     constraint_index column_upper_bound_constraint(unsigned j) const;
     constraint_index column_lower_bound_constraint(unsigned j) const;

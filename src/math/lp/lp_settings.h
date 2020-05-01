@@ -101,6 +101,8 @@ struct statistics {
     unsigned m_gcd_calls;
     unsigned m_gcd_conflicts;
     unsigned m_cube_calls;
+    unsigned m_gomory_cuts;    
+    unsigned m_gomory_cuts_misses;    
     unsigned m_cube_success;
     unsigned m_patches;
     unsigned m_patches_success;

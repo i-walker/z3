@@ -323,7 +323,6 @@ void lar_solver::push() {
     m_term_count = m_terms.size();
     m_term_count.push();
     m_constraints.push();
-    m_usage_in_terms.push();
 }
 
 void lar_solver::clean_popped_elements(unsigned n, u_set& set) {
@@ -356,7 +355,8 @@ void lar_solver::pop(unsigned k) {
           }
           );
     m_columns_to_ul_pairs.pop(k);
-
+    if (n < m_columns_to_terms.size())       
+        m_columns_to_terms.shrink(n);
     m_mpq_lar_core_solver.pop(k);
     clean_popped_elements(n, m_columns_with_changed_bound);
     clean_popped_elements(n, m_incorrect_columns);
@@ -371,6 +371,7 @@ void lar_solver::pop(unsigned k) {
     m_constraints.pop(k);
     m_term_count.pop(k);
     for (unsigned i = m_term_count; i < m_terms.size(); i++) {
+        remove_term_from_columns_to_terms(i);
         if (m_need_register_terms)
             deregister_normalized_term(*m_terms[i]);
         delete m_terms[i];
@@ -381,10 +382,16 @@ void lar_solver::pop(unsigned k) {
     m_settings.simplex_strategy() = m_simplex_strategy;
     lp_assert(sizes_are_correct());
     lp_assert((!m_settings.use_tableau()) || m_mpq_lar_core_solver.m_r_solver.reduced_costs_are_correct_tableau());
-    m_usage_in_terms.pop(k);
     set_status(lp_status::UNKNOWN);
 }
 
+void lar_solver::remove_term_from_columns_to_terms(unsigned k) {
+    for (const auto & p: get_term(tv::mask_term(k))) {
+        if (p.column() >= m_columns_to_terms.size())
+            continue;
+        m_columns_to_terms[p.column()].erase(k);
+    }
+}
 
 bool lar_solver::maximize_term_on_tableau(const lar_term & term,
                                           impq &term_max) {
@@ -1603,8 +1610,9 @@ var_index lar_solver::add_var(unsigned ext_j, bool is_int) {
     lp_assert(m_columns_to_ul_pairs.size() == A_r().column_count());
     local_j = A_r().column_count();
     m_columns_to_ul_pairs.push_back(ul_pair(UINT_MAX));
-    while (m_usage_in_terms.size() <= ext_j) {
-        m_usage_in_terms.push_back(0);
+   
+    if (m_columns_to_terms.size() <= ext_j) {
+        m_columns_to_terms.resize(ext_j + 1);
     }
     add_non_basic_var_to_core_fields(ext_j, is_int);
     lp_assert(sizes_are_correct());
@@ -1774,12 +1782,14 @@ void lar_solver::add_row_from_term_no_constraint(const lar_term * term, unsigned
     m_mpq_lar_core_solver.m_r_solver.update_x(j, get_basic_var_value_from_row(A_r().row_count() - 1));
     if (use_lu())
         fill_last_row_of_A_d(A_d(), term);
+    unsigned term_index = m_terms.size() - 1;
     for (const auto & c : *term) {
         unsigned j = c.column();
-        while (m_usage_in_terms.size() <= j) {
-            m_usage_in_terms.push_back(0);
+        
+        if (m_columns_to_terms.size() <= j) {
+            m_columns_to_terms.resize(j + 1);
         }
-        m_usage_in_terms[j] = m_usage_in_terms[j] + 1;
+        m_columns_to_terms[j].insert(term_index);
     }
         
 }
@@ -2208,6 +2218,12 @@ void lar_solver::update_bound_with_no_ub_no_lb(var_index j, lconstraint_kind kin
 bool lar_solver::column_corresponds_to_term(unsigned j) const {
     return tv::is_term(m_var_register.local_to_external(j));
 }
+
+tv lar_solver::column_to_term(unsigned j) const {
+    SASSERT(column_corresponds_to_term(j));
+    return tv::raw(m_var_register.local_to_external(j));
+}
+
 
 var_index lar_solver::to_column(unsigned ext_j) const {
     return m_var_register.external_to_local(ext_j);

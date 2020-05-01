@@ -3896,6 +3896,8 @@ public:
         st.update("arith-gcd-calls", lp().settings().stats().m_gcd_calls);
         st.update("arith-gcd-conflict", lp().settings().stats().m_gcd_conflicts);
         st.update("arith-cube-calls", lp().settings().stats().m_cube_calls);
+        st.update("arith-gomory-cuts", lp().settings().stats().m_gomory_cuts);
+        st.update("arith-gomory-cuts-misses", lp().settings().stats().m_gomory_cuts_misses);
         st.update("arith-cube-success", lp().settings().stats().m_cube_success);
         st.update("arith-patches", lp().settings().stats().m_patches);
         st.update("arith-patches-success", lp().settings().stats().m_patches_success);

@@ -24,13 +24,13 @@
 
 #define SMALL_CUTS 1
 namespace lp {
-
+template <typename R>
 class create_cut {
     lar_term   &          m_t; // the term to return in the cut
     mpq        &          m_k; // the right side of the cut
     explanation*          m_ex; // the conflict explanation
     unsigned              m_inf_col; // a basis column which has to be an integer but has a non integral value
-    const row_strip<mpq>& m_row;
+    const R&              m_row;
     const int_solver&     lia;
     mpq                   m_lcm_den;
     mpq                   m_f;
@@ -52,7 +52,7 @@ class create_cut {
     const impq & upper_bound(unsigned j) const  { return lia.upper_bound(j); }
     constraint_index column_lower_bound_constraint(unsigned j) const { return lia.column_lower_bound_constraint(j); }
     constraint_index column_upper_bound_constraint(unsigned j) const { return lia.column_upper_bound_constraint(j); }
-    bool column_is_fixed(unsigned j) const { return lia.lra.column_is_fixed(j); }
+    bool column_is_fixed(unsigned j) const { return lia.is_fixed(j); }
 
     void int_case_in_gomory_cut(unsigned j) {
         lp_assert(is_int(j) && m_fj.is_pos());
@@ -280,7 +280,7 @@ class create_cut {
 
 public:
     void dump(std::ostream& out) {
-        out << "applying cut at:\n"; print_linear_combination_indices_only<row_strip<mpq>, mpq>(m_row, out); out << std::endl;
+        out << "applying cut at:\n"; print_linear_combination_indices_only<R, mpq>(m_row, out); out << std::endl;
         for (auto & p : m_row) {
             lia.lra.print_column_info(p.var(), out);
         }
@@ -354,7 +354,7 @@ public:
         return lia_move::cut;
     }
 
-    create_cut(lar_term & t, mpq & k, explanation* ex, unsigned basic_inf_int_j, const row_strip<mpq>& row, const int_solver& lia) :
+    create_cut(lar_term & t, mpq & k, explanation* ex, unsigned basic_inf_int_j, const R& row, const int_solver& lia) :
         m_t(t),
         m_k(k),
         m_ex(ex),
@@ -368,7 +368,7 @@ public:
 };
 
 lia_move gomory::cut(lar_term & t, mpq & k, explanation* ex, unsigned basic_inf_int_j, const row_strip<mpq>& row) {
-    create_cut cc(t, k, ex, basic_inf_int_j, row, lia);
+    create_cut<row_strip<mpq>> cc(t, k, ex, basic_inf_int_j, row, lia);
     return cc.cut();
 }
 
@@ -390,10 +390,9 @@ bool gomory::is_gomory_cut_target(const row_strip<mpq>& row) {
 int gomory::find_basic_var() {
     int result = -1;
     unsigned n = 0;
-    unsigned min_row_size = UINT_MAX;
+    m_min_row_size = UINT_MAX;
 #if 0
     bool boxed = false;
-    mpq min_range;
 #endif
 
 
@@ -409,13 +408,13 @@ int gomory::find_basic_var() {
             continue;
 
 #if 0
-        if (is_boxed(j) && (min_row_size == UINT_MAX || 4*row.size() < 5*min_row_size)) {
+        if (is_boxed(j) && (m_min_row_size == UINT_MAX || 4*row.size() < 5*m_min_row_size)) {
             lar_core_solver & lcs = lra.m_mpq_lar_core_solver;
             auto new_range = lclia.m_r_upper_bounds()[j].x - lclia.m_r_lower_bounds()[j].x;
             if (!boxed) {
                 result = j;
                 n = 1;
-                min_row_size = row.size();
+                m_min_row_size = row.size();
                 boxed = true;
                 min_range = new_range;
                 continue;
@@ -423,33 +422,92 @@ int gomory::find_basic_var() {
             if (min_range > 2*new_range || ((5*min_range > 4*new_range && (random() % (++n)) == 0))) { 
                 result = j;
                 n = 1;
-                min_row_size = row.size();
+                m_min_row_size = row.size();
                 min_range = std::min(min_range, new_range);
                 continue;
             }
         }
 #endif
 
-        if (min_row_size == UINT_MAX || 
-            2*row.size() < min_row_size || 
-            (4*row.size() < 5*min_row_size && lia.random() % (++n) == 0)) {
+        if (m_min_row_size == UINT_MAX || 
+            2*row.size() < m_min_row_size || 
+            (4*row.size() < 5*m_min_row_size && lia.random() % (++n) == 0)) {
             result = j;
             n = 1;
-            min_row_size = std::min(min_row_size, row.size());
+            m_min_row_size = std::min(m_min_row_size, row.size());
         }
     }
     return result;
 }
-    
+
+bool gomory::get_interesting_term(int j, tv & t_var) {    
+    for (unsigned i : lra.terms_of_column(j)) {
+        const lar_term& t = *lra.terms()[i];
+        if (t.size() > m_min_row_size)
+            continue;
+        bool good = true;
+        for (const auto & p : t) {
+            unsigned k = p.column().index();
+            if (k == (unsigned)j) continue;
+            if (!lia.at_bound(k) || !is_zero(lia.get_value(k).y)) {
+                TRACE("gomory_cut", tout << "no\n";);
+                good = false;
+                break;
+            }
+        }
+        if (!good)
+            continue;
+        unsigned k = lra.map_term_index_to_column_index(tv::mask_term(i));
+        if (lia.at_bound(k) && is_zero(lia.get_value(k).y)) {
+            t_var = tv::term(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+lia_move gomory::cut_from_term(lar_term & t, mpq & k, explanation* ex, unsigned basic_inf_int_j, tv t_var) {
+    struct aj {
+        mpq m_a;
+        column_index m_j;
+        aj(): m_j(UINT_MAX) {}
+        aj(const mpq& a, column_index j): m_a(a), m_j(j) {}
+        unsigned var() const { return m_j.index(); }
+        column_index column() const { return m_j; }
+        const mpq& coeff() const { return m_a; }
+    };
+    vector<aj> row;
+    const lar_term& row_term = lia.lra.get_term(t_var);
+    const mpq& b_j_coeff = row_term.get_coeff(basic_inf_int_j);
+    for (const auto& p : row_term) {        
+        if (p.column().index() == basic_inf_int_j) {
+            row.push_back(aj(mpq(1), basic_inf_int_j));
+        } else {
+            row.push_back(aj(p.coeff() / b_j_coeff, p.column()));
+        }
+    }
+    row.push_back(aj(rational(-1)/b_j_coeff, lia.lra.map_term_index_to_column_index(t_var.index())));
+    create_cut<vector<aj>> cc(t, k, ex, basic_inf_int_j, row, lia);
+    return cc.cut();
+}
+
 lia_move gomory::operator()() {
+    lia.settings().stats().m_gomory_cuts++;
     lra.move_non_basic_columns_to_bounds();
     int j = find_basic_var();
-    if (j == -1) return lia_move::undef;
+    if (j == -1) {
+        lia.settings().stats(). m_gomory_cuts_misses++;
+        return lia_move::undef;
+    }
     unsigned r = lia.row_of_basic_column(j);
     const row_strip<mpq>& row = lra.get_row(r);
     SASSERT(lra.row_is_correct(r));
     SASSERT(is_gomory_cut_target(row));
     lia.m_upper = false;
+    tv t_var = tv::raw(-1);
+    if (get_interesting_term(j, t_var)) {
+        return cut_from_term(lia.m_t, lia.m_k, lia.m_ex, j, t_var);
+    }
     return cut(lia.m_t, lia.m_k, lia.m_ex, j, row);
 }
 

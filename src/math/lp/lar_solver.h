@@ -101,7 +101,7 @@ class lar_solver : public column_namer {
     std::unordered_map<lar_term, std::pair<mpq, unsigned>, term_hasher, term_comparer>
     m_normalized_terms_to_columns;
     vector<impq>                                        m_backup_x;
-    stacked_vector<unsigned>                            m_usage_in_terms;
+    vector<std::set<unsigned>>                          m_columns_to_terms;
     // end of fields
 
     ////////////////// methods ////////////////////////////////
@@ -270,6 +270,7 @@ class lar_solver : public column_namer {
         m_mpq_lar_core_solver.m_r_solver.update_x(j, v);
     }
 public:
+    tv column_to_term(unsigned) const;
     inline void set_column_value_test(unsigned j, const impq& v) {
         set_column_value(j, v);
     }
@@ -468,10 +469,18 @@ public:
             return -1;
         }
     }
+    void remove_term_from_columns_to_terms(unsigned);
+
+    const std::set<unsigned>& terms_of_column(column_index j) const {
+        static std::set<unsigned> empty;
+        if (j >= m_columns_to_terms.size())
+            return empty;
+        return m_columns_to_terms[j];
+    }
     unsigned usage_in_terms(column_index j) const {
-        if (j >= m_usage_in_terms.size())
+        if (j >= m_columns_to_terms.size())
             return 0;
-        return m_usage_in_terms[j];
+        return m_columns_to_terms[j].size();
     }
     friend int_solver;
     friend int_branch;

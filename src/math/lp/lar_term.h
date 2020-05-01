@@ -95,6 +95,13 @@ public:
         m_coeffs.erase(j);
         m_coeffs.insert(k, b);
     }
+
+    const mpq& get_coeff(unsigned j) const {
+        SASSERT(contains(j));
+        auto* it = m_coeffs.find_core(j);
+        return it->get_data().m_value;
+        
+    }
     
     bool contains(unsigned j) const {
         return m_coeffs.contains(j);

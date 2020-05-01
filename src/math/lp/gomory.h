@@ -29,7 +29,11 @@ namespace lp {
         class lar_solver& lra;
         int find_basic_var();
         bool is_gomory_cut_target(const row_strip<mpq>& row);
+        lia_move cut_from_term(lar_term & t, mpq & k, explanation* ex, unsigned basic_inf_int_j, tv );
         lia_move cut(lar_term & t, mpq & k, explanation* ex, unsigned basic_inf_int_j, const row_strip<mpq>& row);
+        bool get_interesting_term(int j, tv&);
+        unsigned m_min_row_size;
+
     public:
         gomory(int_solver& lia);
         ~gomory() {}
